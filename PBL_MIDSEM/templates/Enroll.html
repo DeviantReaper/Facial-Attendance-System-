@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>NEURO-SCAN · Enroll Student</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#04060f;--surface:#080d1c;--panel:#0c1428;--border:#0ff3;
+      --cyan:#00ffe5;--cyan-dim:#00ffe540;--magenta:#ff2d78;--green:#39ff14;
+      --red:#ff3860;--text:#c8faf4;--text-dim:#4a8a80;
+      --glow-c:0 0 8px #00ffe5,0 0 20px #00ffe540;
+      --glow-m:0 0 8px #ff2d78,0 0 20px #ff2d7840;
+      --font-hud:'Share Tech Mono',monospace;
+      --font-ui:'Orbitron',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font-hud)}
+    body::before{content:'';position:fixed;inset:0;z-index:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,229,.016) 2px,rgba(0,255,229,.016) 4px);pointer-events:none}
+    body::after{content:'';position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at center,transparent 55%,#000b 100%);pointer-events:none}
+
+    #page{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:24px 20px}
+
+    /* Header */
+    .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+    .logo{font-family:var(--font-ui);font-weight:900;font-size:1.2rem;letter-spacing:.15em;color:var(--cyan);text-shadow:var(--glow-c)}
+    .logo span{color:var(--magenta)}
+    .back-btn{font-family:var(--font-hud);font-size:.65rem;letter-spacing:.12em;color:var(--text-dim);border:1px solid var(--border);border-radius:2px;padding:6px 14px;cursor:pointer;background:transparent;transition:all .2s}
+    .back-btn:hover{color:var(--cyan);border-color:var(--cyan);box-shadow:var(--glow-c)}
+
+    /* Layout */
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+    @media(max-width:600px){.two-col{grid-template-columns:1fr}}
+
+    /* Panels */
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:3px;padding:16px 18px;margin-bottom:16px}
+    .panel-title{font-family:var(--font-ui);font-size:.6rem;letter-spacing:.2em;color:var(--cyan);text-shadow:var(--glow-c);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #0ff2}
+
+    /* Video */
+    .video-wrap{position:relative;border:1px solid var(--border);border-radius:3px;overflow:hidden;background:#000;aspect-ratio:4/3}
+    .video-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+    .video-wrap::before{content:'';position:absolute;top:0;left:0;width:22px;height:22px;border-top:2px solid var(--cyan);border-left:2px solid var(--cyan);z-index:2}
+    .video-wrap::after{content:'';position:absolute;bottom:0;right:0;width:22px;height:22px;border-bottom:2px solid var(--cyan);border-right:2px solid var(--cyan);z-index:2}
+
+    /* Capture progress */
+    .capture-progress{margin-top:10px}
+    .prog-label{font-size:.62rem;color:var(--text-dim);letter-spacing:.1em;margin-bottom:5px;display:flex;justify-content:space-between}
+    .prog-bar{height:5px;background:#0ff1;border-radius:3px;overflow:hidden}
+    .prog-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--magenta));border-radius:3px;width:0%;transition:width .3s}
+
+    /* Form */
+    .field{margin-bottom:14px}
+    .field label{display:block;font-size:.62rem;letter-spacing:.12em;color:var(--text-dim);margin-bottom:6px}
+    .field input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--font-hud);font-size:.78rem;padding:9px 12px;outline:none;transition:border-color .2s,box-shadow .2s}
+    .field input:focus{border-color:var(--cyan);box-shadow:0 0 10px var(--cyan-dim)}
+    .field input::placeholder{color:var(--text-dim)}
+
+    /* Buttons */
+    .btn-enroll{width:100%;padding:10px;font-family:var(--font-ui);font-size:.7rem;letter-spacing:.18em;color:#000;background:var(--cyan);border:none;border-radius:2px;cursor:pointer;box-shadow:var(--glow-c);transition:all .2s;margin-bottom:10px}
+    .btn-enroll:hover{background:#80fff0}
+    .btn-enroll:disabled{opacity:.4;cursor:not-allowed}
+
+    /* Status message */
+    .status-msg{font-size:.68rem;letter-spacing:.08em;padding:8px 10px;border-radius:2px;margin-top:8px;display:none}
+    .status-msg.show{display:block}
+    .status-msg.ok{color:var(--green);background:#39ff1415;border:1px solid #39ff1440}
+    .status-msg.err{color:var(--red);background:#ff386015;border:1px solid #ff386040}
+    .status-msg.info{color:var(--cyan);background:var(--cyan-dim);border:1px solid #0ff3}
+
+    /* Enrolled students list */
+    .student-list{display:flex;flex-direction:column;gap:7px;max-height:280px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#0ff3 transparent}
+    .student-list::-webkit-scrollbar{width:4px}
+    .student-list::-webkit-scrollbar-thumb{background:#0ff3;border-radius:2px}
+    .student-item{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid #0ff1;border-radius:2px;padding:8px 10px;transition:border-color .2s}
+    .student-item:hover{border-color:var(--cyan)}
+    .student-name{font-size:.7rem;letter-spacing:.06em;color:var(--text)}
+    .student-samples{font-size:.58rem;color:var(--text-dim)}
+    .del-btn{font-size:.55rem;letter-spacing:.1em;color:var(--red);border:1px solid #ff386040;border-radius:2px;padding:2px 7px;cursor:pointer;background:transparent;transition:all .2s}
+    .del-btn:hover{background:var(--red);color:#fff;border-color:var(--red)}
+    .empty-students{text-align:center;padding:20px;color:var(--text-dim);font-size:.66rem;letter-spacing:.1em}
+
+    /* Instructions */
+    .steps{list-style:none;counter-reset:step}
+    .steps li{counter-increment:step;display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;font-size:.68rem;color:var(--text-dim);line-height:1.5}
+    .steps li::before{content:counter(step);font-family:var(--font-ui);font-size:.65rem;color:var(--cyan);text-shadow:var(--glow-c);background:var(--surface);border:1px solid var(--cyan);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+
+    /* Photo upload alternative */
+    .upload-section{margin-top:14px;padding-top:12px;border-top:1px solid #0ff2}
+    .upload-label{font-size:.6rem;letter-spacing:.12em;color:var(--text-dim);margin-bottom:8px;display:block}
+    .upload-hint{font-size:.6rem;color:var(--text-dim);margin-top:6px;line-height:1.5}
+  </style>
+</head>
+<body>
+<div id="page">
+
+  <div class="page-header">
+    <div class="logo">NEURO<span>·</span>SCAN <span style="font-size:.7rem;color:var(--text-dim)">ENROLLMENT</span></div>
+    <button class="back-btn" onclick="window.location='/'">← DASHBOARD</button>
+  </div>
+
+  <div class="two-col">
+
+    <!-- Left: Webcam enroll -->
+    <div>
+      <div class="panel">
+        <div class="panel-title">◈ LIVE WEBCAM ENROLLMENT</div>
+
+        <div class="video-wrap">
+          <img src="/video_feed" alt="Live Camera"/>
+        </div>
+
+        <div class="capture-progress">
+          <div class="prog-label">
+            <span id="prog-label-text">READY TO CAPTURE</span>
+            <span id="prog-count">0 / 10</span>
+          </div>
+          <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+        </div>
+
+        <br/>
+        <div class="field">
+          <label>STUDENT FULL NAME</label>
+          <input type="text" id="enroll-name" placeholder="e.g. Shreya Sharma" maxlength="40"/>
+        </div>
+
+        <button class="btn-enroll" id="enroll-btn" onclick="startEnroll()">
+          ◉ &nbsp; CAPTURE &amp; ENROLL
+        </button>
+
+        <div class="status-msg" id="status-msg"></div>
+
+        <div class="upload-section">
+          <span class="upload-label">OR — ADD VIA PHOTO FILE</span>
+          <p class="upload-hint">
+            Place a <strong style="color:var(--cyan)">clear face photo</strong> named
+            <strong style="color:var(--cyan)">StudentName.jpg</strong> inside the
+            <strong style="color:var(--cyan)">students/</strong> folder, then
+            restart <code style="color:var(--magenta)">app.py</code>. The system will auto-enroll it.
+          </p>
+          <p class="upload-hint" style="margin-top:6px">
+            Example: <code style="color:var(--magenta)">students/Rahul_Verma.jpg</code>
+            → enrolled as <strong style="color:var(--cyan)">"Rahul Verma"</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: enrolled list + instructions -->
+    <div>
+      <div class="panel">
+        <div class="panel-title">◈ ENROLLED STUDENTS</div>
+        <div class="student-list" id="student-list">
+          <div class="empty-students">No students enrolled yet.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">◈ HOW TO ENROLL</div>
+        <ol class="steps">
+          <li>Type the student's full name above.</li>
+          <li>Have the student look directly at the camera.</li>
+          <li>Click <strong style="color:var(--cyan)">CAPTURE &amp; ENROLL</strong>.</li>
+          <li>The system captures 10 face samples automatically — takes ~3 seconds.</li>
+          <li>A success message appears and the student is added to the list.</li>
+          <li>Repeat for each student.</li>
+          <li>Go back to the Dashboard and run attendance.</li>
+        </ol>
+
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid #0ff2;font-size:.62rem;color:var(--text-dim);line-height:1.6">
+          <strong style="color:var(--cyan)">Tips for better recognition:</strong><br/>
+          · Good lighting on the face<br/>
+          · Enroll from the same distance you'll use during attendance<br/>
+          · Enroll 2-3 times per student for best accuracy<br/>
+          · Face should fill ~30% of the frame
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let pollInterval = null;
+
+  async function startEnroll(){
+    const name = document.getElementById("enroll-name").value.trim();
+    if(!name){ showMsg("Please enter the student's name first.", "err"); return; }
+
+    document.getElementById("enroll-btn").disabled = true;
+    showMsg(`Capturing ${name}... look at the camera!`, "info");
+
+    const r = await fetch("/api/enroll", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({name})
+    });
+    const d = await r.json();
+    if(d.error){ showMsg(d.error, "err"); document.getElementById("enroll-btn").disabled=false; return; }
+
+    // Poll for capture progress
+    pollInterval = setInterval(pollEnrollStatus, 400);
+  }
+
+  async function pollEnrollStatus(){
+    const r = await fetch("/api/enroll/status");
+    const d = await r.json();
+
+    const pct = Math.min(100, (d.captured/d.needed)*100);
+    document.getElementById("prog-fill").style.width = pct+"%";
+    document.getElementById("prog-count").textContent = `${d.captured} / ${d.needed}`;
+    document.getElementById("prog-label-text").textContent = d.active ? "CAPTURING…" : "READY";
+
+    if(d.done){
+      clearInterval(pollInterval);
+      showMsg("✓ " + d.msg, "ok");
+      document.getElementById("enroll-btn").disabled = false;
+      document.getElementById("enroll-name").value = "";
+      document.getElementById("prog-fill").style.width = "0%";
+      document.getElementById("prog-count").textContent = "0 / 10";
+      document.getElementById("prog-label-text").textContent = "READY TO CAPTURE";
+      renderStudentList(d.enrolled);
+    }
+  }
+
+  async function loadStudents(){
+    const r = await fetch("/api/enroll/status");
+    const d = await r.json();
+    renderStudentList(d.enrolled);
+  }
+
+  function renderStudentList(names){
+    const el = document.getElementById("student-list");
+    if(!names.length){
+      el.innerHTML = '<div class="empty-students">No students enrolled yet.</div>';
+      return;
+    }
+    el.innerHTML = names.map(n => `
+      <div class="student-item">
+        <div>
+          <div class="student-name">${n}</div>
+          <div class="student-samples">Face samples stored</div>
+        </div>
+        <button class="del-btn" onclick="deleteStudent('${n}')">✕ REMOVE</button>
+      </div>`).join("");
+  }
+
+  async function deleteStudent(name){
+    if(!confirm(`Remove ${name} from the enrollment database?`)) return;
+    await fetch("/api/enroll/delete", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({name})
+    });
+    loadStudents();
+  }
+
+  function showMsg(text, type){
+    const el = document.getElementById("status-msg");
+    el.textContent = text;
+    el.className   = `status-msg show ${type}`;
+  }
+
+  loadStudents();
+</script>
+</body>
+</html>
