@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Camera, CheckCircle, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { registerMockStudent } from "../data/mockData";
+import { studentsAPI, faceAPI } from "../services/api";
 
 export default function RegisterStudent() {
   const navigate = useNavigate();
@@ -57,23 +57,46 @@ export default function RegisterStudent() {
     setCapturedImage(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!capturedImage) {
       alert("Please capture a face reference before registering.");
       return;
     }
-    // Add to mock data
-    registerMockStudent(name, rollNo);
-    
-    // Stop camera
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
+
+    try {
+      // 1. Create Student record
+      const sRes = await studentsAPI.create({
+        name,
+        roll_no: rollNo,
+        email: `${rollNo.toLowerCase()}@muj.edu.in`
+      });
+      const studentId = sRes.data.id;
+
+      // 2. Convert base64 capture to Blob
+      const res = await fetch(capturedImage);
+      const blob = await res.blob();
+      const file = new File([blob], "face.png", { type: "image/png" });
+      
+      // 3. Register Face
+      const fd = new FormData();
+      fd.append("student_id", studentId);
+      fd.append("files", file);
+      
+      await faceAPI.enroll(fd);
+
+      // Stop camera
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      
+      alert(`Successfully registered ${name}! You can now login or be marked present.`);
+      navigate("/");
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.detail || "Failed to register. Roll number might already exist.");
     }
-    
-    alert(`Successfully registered ${name}! You can now login as them in the Student View.`);
-    navigate("/");
   };
 
   return (
