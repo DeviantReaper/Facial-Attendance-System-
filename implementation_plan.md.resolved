@@ -1,0 +1,353 @@
+# Face Recognition Attendance Portal — Full Production Upgrade
+
+## Overview
+
+You already have a solid foundation in `Facial-Attendance-System--main` — a FastAPI backend with DeepFace/YOLOv8, a React/Vite frontend with role-based routing, dark/light theme, live webcam attendance, and SQLite. This plan **upgrades and extends** that codebase (rather than starting from scratch) into the full production-grade system you described.
+
+The target is the `/Users/shreya/Library/CloudStorage/OneDrive-ManipalUniversityJaipur/Facial-Attendance-System--main` directory.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Database Migration: SQLite → PostgreSQL**
+> The current system uses SQLite (`facial_attendance.db`). The plan migrates to PostgreSQL via Docker. All data in the existing SQLite file will need to be re-seeded. Should we keep SQLite as a fallback for local dev?
+
+> [!WARNING]
+> **Face Model Change**
+> Current: YOLOv8n (general object detection) + DeepFace Facenet512
+> Plan: SSD MobileNet v1 (via `@vladmandic/face-api` in browser) + DeepFace Facenet512 (server-side)
+> The browser-side face-api.js models (~6MB) must be downloaded and served from `/public/models/`.
+
+> [!IMPORTANT]
+> **Color Scheme Remap**
+> Current palette: indigo/violet dark (`#6366f1`, `#0f111a`).
+> Spec calls for: Navy blue `#1e3a5f` primary + white + orange `#f97316` accent.
+> All CSS variables and UI will be updated to match the university ERP style.
+
+---
+
+## What Already Exists (Kept & Extended)
+
+| Component | Status |
+|-----------|--------|
+| FastAPI backend + CORS | ✅ Keep, extend with new routers |
+| DeepFace Facenet512 embeddings | ✅ Keep as-is |
+| SQLite DB (User, Attendance models) | 🔄 Migrate to PostgreSQL |
+| React + Vite + react-router-dom | ✅ Keep |
+| Role-based routing (professor/student) | ✅ Keep, add admin role |
+| Layout + StudentLayout sidebars | ✅ Keep, restyle |
+| AttendanceCamera component | ✅ Keep, enhance with face-api.js |
+| Dark/light theme toggle | ✅ Keep |
+| Mock data (classes, students) | 🔄 Replace with real API calls |
+
+---
+
+## Proposed Changes
+
+### 1. Backend — New Database Schema & Models
+
+#### [NEW] `app/models/student.py`
+SQLAlchemy model: `students` table — id, name, roll_no, email, phone, college_id (FK), department, semester, profile_photo_path, is_enrolled, enrollment_status, created_at
+
+#### [NEW] `app/models/teacher.py`
+SQLAlchemy model: `teachers` table — id, name, email, password_hash, institution, is_admin, created_at
+
+#### [NEW] `app/models/class_model.py`
+SQLAlchemy model: `classes` table — id, subject_name, subject_code, teacher_id (FK), room_number, schedule (JSON), min_attendance_pct, late_threshold_minutes
+
+#### [NEW] `app/models/enrollment.py`
+SQLAlchemy model: `enrollments` table — id, student_id (FK), class_id (FK), enrolled_at, status
+
+#### [NEW] `app/models/face_descriptor.py`
+SQLAlchemy model: `face_descriptors` table — id, student_id (FK), embedding (JSON array 512-d), quality_score, created_at
+
+#### [MODIFY] `app/models/attendance.py`
+Add: class_id (FK), status (present/absent/late), confidence_score, is_manual_override, time_marked fields
+
+#### [NEW] `app/models/college.py`
+SQLAlchemy model: `colleges` table — id, name, api_key_hash, permissions (JSON), webhook_url, ip_whitelist
+
+#### [NEW] `app/models/notification.py`
+SQLAlchemy model: `notifications` table — id, user_id, type, message, is_read, created_at
+
+---
+
+### 2. Backend — New API Routers
+
+#### [NEW] `app/api/auth.py`
+- `POST /api/v1/auth/login` — returns JWT (teacher + student)
+- `POST /api/v1/auth/student-login` — student login by roll_no + password
+- `POST /api/v1/auth/college-token` — API key → JWT for partner college
+- `POST /api/v1/auth/refresh`
+- JWT middleware for all protected routes
+
+#### [NEW] `app/api/classes.py`
+- `GET/POST /api/v1/classes` — list/create
+- `GET/PUT/DELETE /api/v1/classes/:id`
+- `POST /api/v1/classes/:id/students` — assign students
+- `GET /api/v1/classes/:id/students`
+
+#### [NEW] `app/api/students.py`
+- `GET/POST /api/v1/students` — list/create
+- `GET/PUT/DELETE /api/v1/students/:id`
+- `POST /api/v1/students/bulk-import` — CSV upload
+- `GET /api/v1/students/:id/attendance` — history
+
+#### [MODIFY] `app/api/register.py`
+- Add: quality check (blur detection, face angle), enrollment confidence score, multi-photo enrollment with quality scoring
+
+#### [MODIFY] `app/api/recognize.py`
+- Add: class_id param, mark attendance per-class, WebSocket broadcast on recognition
+
+#### [NEW] `app/api/attendance.py` (replace stub)
+- `GET /api/v1/attendance` — filter by class/date/student
+- `PUT /api/v1/attendance/:id` — manual override
+- `GET /api/v1/attendance/reports` — aggregated stats
+- `POST /api/v1/attendance/export` — PDF/Excel
+
+#### [NEW] `app/api/integrate.py`
+- `POST /api/v1/integrate/enroll`
+- `GET /api/v1/integrate/students`
+- `POST /api/v1/integrate/attendance`
+- `GET /api/v1/integrate/attendance/:id`
+
+#### [NEW] `app/api/websocket.py`
+- `WS /ws/attendance/:session_id` — real-time recognition events
+
+---
+
+### 3. Backend — Services Updates
+
+#### [MODIFY] `app/services/face_service.py`
+- Replace YOLOv8 (general detection) with **MediaPipe Face Detection** (faster, face-specific, no 6MB YOLO needed for face-only task. YOLOv8 stays as optional fallback)
+- Add image quality checks: blur (Laplacian variance), brightness, face angle estimation
+
+#### [MODIFY] `app/services/embedding_service.py`
+- Add: cosine similarity instead of euclidean for matching
+- Add: average embedding from multiple enrollment photos
+
+#### [NEW] `app/services/auth_service.py`
+- JWT creation/validation (python-jose)
+- bcrypt password hashing (passlib)
+- API key generation (secrets)
+
+#### [NEW] `app/services/report_service.py`
+- PDF generation (reportlab or fpdf2)
+- Excel export (openpyxl)
+- Attendance stats computation
+
+#### [NEW] `app/services/notification_service.py`
+- Email via SMTP (smtplib / fastapi-mail)
+- In-app notification creation
+
+---
+
+### 4. Backend — Config & Infrastructure
+
+#### [MODIFY] `app/core/config.py`
+- Add: JWT_SECRET, JWT_EXPIRE_MINUTES, SMTP_* settings, S3/local upload path, PostgreSQL URL
+
+#### [MODIFY] `app/core/database.py`
+- PostgreSQL support via psycopg2
+
+#### [NEW] `app/core/security.py`
+- JWT encode/decode, password hash/verify, API key generation
+
+#### [NEW] `alembic/` (migration directory)
+- `alembic.ini`, `env.py`, initial migration script for all new tables
+
+#### [MODIFY] `requirements.txt`
+- Add: python-jose[cryptography], passlib[bcrypt], python-multipart, alembic, psycopg2-binary, reportlab, openpyxl, fastapi-mail, mediapipe, websockets
+
+#### [MODIFY] `docker-compose.yml`
+- Add PostgreSQL service, Redis service, mount volumes
+
+#### [NEW] `.env.example`
+- All environment variables documented
+
+---
+
+### 5. Frontend — Complete Redesign
+
+#### [MODIFY] `frontend/src/index.css`
+**Full restyle** to university ERP palette:
+- Primary: `#1e3a5f` (navy), Accent: `#f97316` (orange), Inter font
+- New CSS variables, button system, sidebar styles, table styles, badge system
+- WCAG 2.1 AA contrast ratios
+
+#### [MODIFY] `frontend/package.json`
+Add: `@vladmandic/face-api`, `socket.io-client`, `react-hot-toast`, `react-hook-form`, `date-fns`, `jspdf`, `xlsx`
+
+#### [NEW] `frontend/public/models/` 
+Script to download SSD MobileNet + FaceNet model weights for face-api.js browser inference
+
+#### [MODIFY] `frontend/src/context/AuthContext.jsx`
+- Real JWT-based auth (localStorage token, axios interceptors)
+- Add admin role
+
+#### [NEW] `frontend/src/services/api.js`
+- Axios instance with JWT from localStorage
+- All API call functions
+
+---
+
+### 6. Frontend — Teacher/Admin Portal Pages
+
+#### [MODIFY] `frontend/src/pages/Dashboard.jsx`
+- Real API data (no more mockData)
+- Stats: today's attendance, pending enrollments, activity feed
+- Charts: daily bar + weekly line trend
+
+#### [MODIFY] `frontend/src/pages/Classes.jsx`
+- Create/edit/delete class modal
+- Real API CRUD
+
+#### [MODIFY] `frontend/src/pages/ClassDetail.jsx`
+- Start/Stop attendance session
+- Real-time WebSocket face recognition feed
+- Face boxes with name + confidence % badge (color coded)
+- Manual override on click
+- Session summary modal
+
+#### [NEW] `frontend/src/pages/Students.jsx`
+- Student list with search/filter
+- Add (manual form), bulk CSV import
+- Student profile modal: photo, attendance heatmap calendar
+
+#### [NEW] `frontend/src/pages/FaceEnrollment.jsx`
+- Option A: Upload 3-5 photos
+- Option B: Webcam — auto-captures 5 frames
+- Quality check display with blur/angle/confidence scores
+- Re-enrollment flow
+
+#### [NEW] `frontend/src/pages/Reports.jsx`
+- Date range picker, class/student filter
+- Bar, line, pie charts (recharts)
+- Defaulters list
+- Export PDF/Excel buttons
+
+#### [NEW] `frontend/src/pages/Settings.jsx`
+- Institution info, logo upload
+- Attendance rules (min %, late threshold)
+- Email templates
+- Integration settings: API key gen, webhook URL
+
+#### [NEW] `frontend/src/pages/Integrations.jsx`
+- Partner college list
+- Generate API keys
+- Permission management
+
+---
+
+### 7. Frontend — Student Portal Pages
+
+#### [MODIFY] `frontend/src/pages/student/StudentDashboard.jsx`
+- Today's attendance per subject
+- Donut chart per subject attendance %
+- Calendar heatmap (color coded attendance days)
+- Alerts for low attendance
+
+#### [MODIFY] `frontend/src/pages/student/StudentSubjects.jsx`
+- Per-subject attendance breakdown
+
+#### [MODIFY] `frontend/src/pages/student/StudentHistory.jsx`
+- Full history table with filter/search
+- Download attendance certificate PDF
+
+#### [NEW] `frontend/src/pages/student/StudentEnrollment.jsx`
+Multi-step self-enrollment flow:
+1. Personal details form
+2. 8-angle webcam face capture (with `@vladmandic/face-api`)
+3. Quality check visual feedback
+4. Review & Submit
+5. Confirmation with enrollment ID
+
+#### [NEW] `frontend/src/pages/student/StudentProfile.jsx`
+- Edit personal details
+- Re-enrollment request
+- Change password
+
+---
+
+### 8. Frontend — Components
+
+#### [MODIFY] `frontend/src/components/AttendanceCamera.jsx`
+- Integrate `@vladmandic/face-api` for browser-side detection
+- SSD MobileNet v1 model (browser)
+- Real-time face boxes on canvas overlay
+- Color-coded confidence badges
+- WebSocket connection to backend for server-side verification
+
+#### [NEW] `frontend/src/components/FaceCapture.jsx`
+- Reusable 8-angle capture component (used in Registration + Student Enrollment)
+- Auto-frame capture with angle prompts
+
+#### [NEW] `frontend/src/components/QualityCheckDisplay.jsx`
+- Shows blur score, brightness, face angle, overall quality rating
+
+#### [NEW] `frontend/src/components/AttendanceSummaryModal.jsx`
+- End-of-session popup: X present, Y absent, Z late
+- Send absence emails toggle
+
+#### [NEW] `frontend/src/components/Toast.jsx`
+- Toast notification system (or use `react-hot-toast`)
+
+#### [MODIFY] `frontend/src/components/Layout.jsx`
+- Full sidebar with: Dashboard, Classes, Students, Attendance, Reports, Settings, Integrations icons
+
+#### [NEW] `frontend/src/components/CalendarHeatmap.jsx`
+- Color-coded attendance calendar (used in student dashboard + admin student profiles)
+
+---
+
+### 9. Deliverables
+
+#### [NEW] `README.md` (full rewrite)
+- Setup guide, env vars, Docker instructions, feature list
+
+#### [NEW] `.env.example`
+- All variables documented
+
+#### [NEW] `scripts/download_models.sh`
+- Downloads face-api.js model weights to `frontend/public/models/`
+
+#### [NEW] `scripts/seed_data.py`
+- Sample teachers, students, classes, attendance records
+
+#### [NEW] `docs/api.md` or `docs/openapi.json`
+- Auto-generated Swagger docs + Postman collection
+
+#### [NEW] `DEPLOY.md`
+- VPS (nginx + gunicorn) + Vercel/Railway guide
+
+---
+
+## Verification Plan
+
+### Automated Tests
+```bash
+# Backend: start server
+cd Facial-Attendance-System--main
+python -m uvicorn app.main:app --reload
+
+# Visit FastAPI docs
+open http://localhost:8000/docs
+
+# Frontend: start dev server
+cd frontend && npm run dev
+open http://localhost:5173
+```
+
+### Manual Verification Checklist
+1. Login as teacher → dashboard loads with real class data
+2. Create a new class → appears in list
+3. Add student → face enrollment (upload + webcam modes)
+4. Start attendance → webcam activates, face boxes appear, name labels shown
+5. Session end → summary popup, attendance logged to DB
+6. Login as student → dashboard shows attendance %
+7. Student self-enrollment → 8-angle capture, quality check, submission
+8. Reports → charts render, PDF exports correctly
+9. Settings → API key generated for partner college
+10. Integration API → POST to `/api/v1/integrate/enroll` with API key

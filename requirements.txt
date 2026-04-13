@@ -1,0 +1,38 @@
+fastapi==0.104.0
+uvicorn==0.23.2
+python-multipart==0.0.6
+sqlalchemy==2.0.22
+pydantic-settings==2.0.3
+alembic==1.12.1
+
+# Database drivers
+psycopg2-binary==2.9.9
+
+# Computer Vision & ML
+opencv-python-headless==4.8.1.78
+deepface
+tf-keras
+scipy==1.11.3
+numpy==1.26.1
+
+# Face detection alternative (faster, face-specific)
+# mediapipe==0.10.7    # optional: uncomment if not using YOLOv8 for detection
+ultralytics==8.0.200
+
+# Auth & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# HTTP
+requests==2.31.0
+httpx==0.25.2
+
+# Reporting
+reportlab==4.0.7
+openpyxl==3.1.2
+
+# Email (optional)
+# fastapi-mail==1.4.1
+
+# WebSockets
+websockets==12.0
